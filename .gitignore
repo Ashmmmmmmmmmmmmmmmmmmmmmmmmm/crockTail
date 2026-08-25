@@ -1,0 +1,13 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend(Maven)
+backend/target/
+backend/.idea/
+*.class
+*.iml
+
+# General
+.env
+.vscode/
