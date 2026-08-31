@@ -23,4 +23,9 @@ public class DnsReport {
 
     public List<String> getTxt() { return txt; }
     public void setTxt(List<String> txt) { this.txt = txt; }
+
+    private String source = "Public DNS resolvers (dnsjava)";
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }

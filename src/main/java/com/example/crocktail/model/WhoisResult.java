@@ -17,4 +17,9 @@ public class WhoisResult {
 
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+
+    private String source = "rdap.org";
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }

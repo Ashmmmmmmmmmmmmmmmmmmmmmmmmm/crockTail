@@ -27,4 +27,10 @@ public class SslCertResult {
 
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+
+
+    private String source = "Direct TLS handshake (port 443)";
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }

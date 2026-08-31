@@ -3,51 +3,39 @@ package com.example.crocktail.controller;
 import com.example.crocktail.model.*;
 import com.example.crocktail.service.*;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 public class ScanController {
 
-    private final DnsLookupService dnsLookupService;
-    private final IpInfoService ipInfoService;
-    private final SslCertService sslCertService;
-    private final WhoisService whoisService;
+    private final ScanService scanService;
+    private final BatchScanService batchScanService;
+    private final QueryLogService queryLogService;
 
-    public ScanController(DnsLookupService dnsLookupService,
-                           IpInfoService ipInfoService,
-                           SslCertService sslCertService,
-                           WhoisService whoisService) {
-        this.dnsLookupService = dnsLookupService;
-        this.ipInfoService = ipInfoService;
-        this.sslCertService = sslCertService;
-        this.whoisService = whoisService;
+    public ScanController(ScanService scanService,
+                          BatchScanService batchScanService,
+                          QueryLogService queryLogService) {
+        this.scanService = scanService;
+        this.batchScanService = batchScanService;
+        this.queryLogService = queryLogService;
     }
 
     @GetMapping("/scan")
     public ScanResult scan(@RequestParam String domain) {
-        String cleanDomain = UrlNormalizer.extractDomain(domain);
+        return scanService.scan(domain);
+    }
 
-        ScanResult result = new ScanResult();
-        result.setDomain(cleanDomain);
+    @PostMapping("/scan/batch")
+    public BatchScanResult batchScan(@RequestBody BatchScanRequest request) {
+        return batchScanService.batchScan(request.getDomains());
+    }
 
-        DnsReport dnsReport = dnsLookupService.fullLookup(cleanDomain);
-        result.setDns(dnsReport);
-
-        List<String> aRecords = dnsReport.getA();
-        if (aRecords != null && !aRecords.isEmpty()) {
-            IpInfoResult ipInfo = ipInfoService.lookup(aRecords.get(0));
-            result.setIpInfo(ipInfo);
-        }
-
-        SslCertResult sslCert = sslCertService.inspect(cleanDomain);
-        result.setSslCert(sslCert);
-
-        WhoisResult whois = whoisService.lookup(cleanDomain);
-        result.setWhois(whois);
-
-        return result;
+    @PostMapping("/scan/log")
+    public String saveToLog(@RequestBody ScanResult result) {
+        queryLogService.logQuery(result);
+        return "Logged successfully";
     }
 }
