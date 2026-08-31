@@ -89,13 +89,13 @@ GET /scan?domain=example.com
 
 ## Roadmap
 
-- [ ]  Batch queries (multiple domains per request)
-- [ ]  Per-result source attribution + timestamps
-- [ ]  Cross-verification across multiple data sources (crt.sh, Shodan/Censys passive data) for higher-confidence results
-- [ ]  Optional query history (log file, then database if the project grows)
-- [ ]  Response caching
-- [ ]  Per-module timeout + graceful partial-failure handling
-- [ ]  Unit tests per service module
+- [x] Batch queries
+- [x] Per-result source attribution
+- [x] Query logging
+- [ ] Cross-verification across multiple data sources (crt.sh, Shodan/Censys passive data) for higher-confidence results
+- [ ] Response caching
+- [ ] Per-module timeout + graceful partial-failure handling
+- [ ] Unit tests per service module
 
 ## Disclaimer
 
