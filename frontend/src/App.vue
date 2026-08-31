@@ -54,6 +54,67 @@ const handleScan = async () => {
   }
 }
 
+/* ---------- batch mode ---------- */
+const batchMode = ref(false)
+const batchInput = ref('')
+const batchResults = ref([])
+const batchLoading = ref(false)
+
+const handleBatchScan = async () => {
+  const domains = batchInput.value
+      .split('\n')
+      .map(d => d.trim())
+      .filter(d => d.length > 0)
+
+  if (domains.length === 0) {
+    errorMsg.value = 'Enter at least one domain (one per line).'
+    return
+  }
+
+  batchLoading.value = true
+  errorMsg.value = ''
+  batchResults.value = []
+
+  try {
+    const response = await fetch('http://localhost:8080/scan/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domains })
+    })
+    if (!response.ok) throw new Error(`Server returned status ${response.status}`)
+    const data = await response.json()
+    batchResults.value = data.results
+  } catch (err) {
+    errorMsg.value = 'Batch scan failed: ' + err.message
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+/* ---------- save to log ---------- */
+const savingLog = ref(false)
+const savedMsg = ref('')
+
+const handleSaveLog = async () => {
+  if (!result.value) return
+  savingLog.value = true
+  savedMsg.value = ''
+  try {
+    const response = await fetch('http://localhost:8080/scan/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(result.value)
+    })
+    if (!response.ok) throw new Error(`Server returned status ${response.status}`)
+    savedMsg.value = 'Saved ✓'
+  } catch (err) {
+    savedMsg.value = 'Save failed'
+  } finally {
+    savingLog.value = false
+    setTimeout(() => { savedMsg.value = '' }, 2000)
+  }
+}
+
 /* ---------- ghost sprite: 2-frame idle bitmap ---------- */
 const W = '#8080b8'
 const Wd = '#5858a0'
@@ -124,6 +185,27 @@ onMounted(() => {
 onUnmounted(() => clearInterval(ghostTimer))
 
 const bgDim = computed(() => loading.value || !!result.value)
+
+const batchSavingIndex = ref(null)
+const batchSavedIndex = ref(null)
+
+const handleBatchSaveLog = async (item, index) => {
+  batchSavingIndex.value = index
+  try {
+    const response = await fetch('http://localhost:8080/scan/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item)
+    })
+    if (!response.ok) throw new Error(`Server returned status ${response.status}`)
+    batchSavedIndex.value = index
+    setTimeout(() => { batchSavedIndex.value = null }, 2000)
+  } catch (err) {
+    console.error('Batch save failed:', err)
+  } finally {
+    batchSavingIndex.value = null
+  }
+}
 </script>
 
 <template>
@@ -157,7 +239,12 @@ const bgDim = computed(() => loading.value || !!result.value)
         <p class="subtitle">Passive OSINT Domain Reconnaissance Tool</p>
       </header>
 
-      <div class="search-container">
+      <div class="mode-toggle">
+        <button class="px-btn-sm" :class="{ active: !batchMode }" @click="batchMode = false">SINGLE</button>
+        <button class="px-btn-sm" :class="{ active: batchMode }" @click="batchMode = true">BATCH</button>
+      </div>
+
+      <div v-if="!batchMode" class="search-container">
         <div class="search-box">
           <span class="prompt-symbol">&gt;</span>
           <input
@@ -171,6 +258,18 @@ const bgDim = computed(() => loading.value || !!result.value)
         </div>
         <button class="px-btn" @click="handleScan" :disabled="loading">
           {{ loading ? '...' : 'SCAN' }}
+        </button>
+      </div>
+
+      <div v-else class="batch-container">
+  <textarea
+      v-model="batchInput"
+      class="batch-input"
+      placeholder="example.com&#10;google.com&#10;one per line..."
+      spellcheck="false"
+  ></textarea>
+        <button class="px-btn" @click="handleBatchScan" :disabled="batchLoading">
+          {{ batchLoading ? '...' : 'SCAN ALL' }}
         </button>
       </div>
 
@@ -199,16 +298,19 @@ const bgDim = computed(() => loading.value || !!result.value)
             <div class="kv"><span>MX</span><code>{{ result.dns.mx.join(', ') || '—' }}</code></div>
             <div class="kv"><span>NS</span><code>{{ result.dns.ns.join(', ') || '—' }}</code></div>
             <div class="kv"><span>TXT</span><code class="wrap">{{ result.dns.txt.join('  |  ') || '—' }}</code></div>
+            <div class="kv"><span>Source</span><code>{{ result.dns.source }}</code></div>
+
           </template>
 
           <template v-if="activeTab === 'ip'">
             <p v-if="result.ipInfo?.suspectedIntercepted" class="warn-line">
               ⚠ RESERVED/TEST RANGE — LIKELY DNS INTERCEPTION
             </p>
-            <div class="kv"><span>IP</span><code>{{ result.ipInfo?.ip || '—' }}</code></div>
+            <div class="kv"><span></span><code>{{ result.ipInfo?.ip || '—' }}</code></div>
             <div class="kv"><span>Country</span><code>{{ result.ipInfo?.country || 'Unknown' }}</code></div>
             <div class="kv"><span>ISP</span><code>{{ result.ipInfo?.isp || 'Unknown' }}</code></div>
             <div class="kv"><span>ASN</span><code>{{ result.ipInfo?.asNumber || 'Unknown' }}</code></div>
+            <div class="kv"><span>Source</span><code>{{ result.ipInfo?.source }}</code></div>
           </template>
 
           <template v-if="activeTab === 'ssl'">
@@ -220,10 +322,12 @@ const bgDim = computed(() => loading.value || !!result.value)
               <ul class="san-list">
                 <li v-for="san in result.sslCert?.sanDomains" :key="san">{{ san }}</li>
               </ul>
+              <div class="kv"><span>Source</span><code>{{ result.sslCert?.source }}</code></div>
             </template>
           </template>
 
           <template v-if="activeTab === 'whois'">
+            <div class="kv"><span>Source</span><code>{{ result.whois?.source }}</code></div>
             <template v-if="whoisSummary">
               <div class="kv"><span>Registrar</span><code>{{ whoisSummary.registrar }}</code></div>
               <div class="kv"><span>Registered</span><code>{{ whoisSummary.registrationDate }}</code></div>
@@ -237,12 +341,29 @@ const bgDim = computed(() => loading.value || !!result.value)
 
         <div class="panel-footer">
           <span>crockTail v1.0 // passive // no active probing</span>
-          <span>● DONE</span>
+          <button class="log-btn" @click="handleSaveLog" :disabled="savingLog">
+            {{ savedMsg || (savingLog ? 'SAVING...' : '↓ SAVE LOG') }}
+          </button>
         </div>
-      </div>
 
       <p v-if="!loading && !result" class="idle-hint">enter a domain and press scan</p>
     </div>
+
+    <div v-if="batchResults.length > 0" class="batch-results">
+      <div class="batch-header">
+        <span>DOMAIN</span><span>A RECORD</span><span>ISP</span><span>SSL ISSUER</span><span></span>
+      </div>
+      <div v-for="(r, index) in batchResults" :key="r.domain" class="batch-row">
+        <span>{{ r.domain }}</span>
+        <span>{{ r.dns?.a?.[0] || '—' }}</span>
+        <span>{{ r.ipInfo?.isp || '—' }}</span>
+        <span>{{ r.sslCert?.issuer || '—' }}</span>
+        <button class="log-btn-sm" @click="handleBatchSaveLog(r, index)" :disabled="batchSavingIndex === index">
+          {{ batchSavedIndex === index ? '✓' : (batchSavingIndex === index ? '...' : '↓') }}
+        </button>
+      </div>
+    </div>
+  </div>
   </div>
 </template>
 
@@ -403,4 +524,43 @@ html, body {
 @keyframes ghostFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
 @keyframes titlePulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 @keyframes panelReveal { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+.mode-toggle { display: flex; gap: 6px; margin-top: 40px; }
+.px-btn-sm {
+  font-family: 'Press Start 2P', monospace; font-size: 0.6rem;
+  background: #16192b; color: #505078; border: 2px solid #232740;
+  padding: 8px 16px; cursor: pointer;
+}
+.px-btn-sm.active { background: #2828a0; color: #c4c4e4; }
+
+.batch-container { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 460px; }
+.batch-input {
+  background: #090a10; border: 2px solid #232740; color: #c2c9ee;
+  font-family: 'VT323', monospace; font-size: 18px; padding: 12px;
+  min-height: 100px; resize: vertical; outline: none;
+}
+.batch-input::placeholder { color: #4a5173; }
+
+.batch-results { width: 100%; margin-top: 2rem; border: 2px solid #222244; }
+.batch-header, .batch-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 40px; gap: 8px;
+  padding: 8px 12px; font-family: 'VT323', monospace; font-size: 16px;
+}
+.batch-header { background: #121228; color: #505078; font-size: 12px; text-transform: uppercase; }
+.batch-row { color: #9090c0; border-top: 1px solid #1a1a30; }
+
+.log-btn {
+  font-family: 'VT323', monospace; font-size: 14px; color: #7272e0;
+  background: transparent; border: 1px solid #3434a0; padding: 3px 10px; cursor: pointer;
+}
+.log-btn:hover:not(:disabled) { color: #a0a0f0; border-color: #5858d0; background: rgba(52,52,160,0.15); }
+.log-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.log-btn-sm {
+  font-family: 'VT323', monospace; font-size: 16px; color: #7272e0;
+  background: transparent; border: 1px solid #3434a0; cursor: pointer;
+  padding: 2px 6px; line-height: 1;
+}
+.log-btn-sm:hover:not(:disabled) { color: #a0a0f0; border-color: #5858d0; }
+.log-btn-sm:disabled { cursor: not-allowed; opacity: 0.5; }
 </style>
