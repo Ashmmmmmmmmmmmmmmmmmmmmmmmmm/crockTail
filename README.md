@@ -145,6 +145,5 @@ Historical change tracking and report export were considered and deliberately de
 
 For educational and authorized security research purposes only. The author assumes no liability for misuse. Always confirm you have permission to assess a target before running reconnaissance against it.
 
-For educational and authorized security research purposes only. The author assumes no liability for misuse. Always confirm you have permission to assess a target before running reconnaissance against it.
 
 
