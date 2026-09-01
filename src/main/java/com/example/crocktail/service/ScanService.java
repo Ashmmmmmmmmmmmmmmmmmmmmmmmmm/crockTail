@@ -12,16 +12,26 @@ public class ScanService {
     private final SslCertService sslCertService;
     private final WhoisService whoisService;
     private final QueryLogService queryLogService;
+    private final CrtShService crtShService;
+    private final RiskAssessmentService riskAssessmentService;
+    private final CrossVerificationService crossVerificationService;
 
     public ScanService(DnsLookupService dnsLookupService,
                        IpInfoService ipInfoService,
                        SslCertService sslCertService,
-                       WhoisService whoisService, QueryLogService queryLogService) {
+                       WhoisService whoisService,
+                       QueryLogService queryLogService,
+                       CrtShService crtShService,
+                       RiskAssessmentService riskAssessmentService,
+                       CrossVerificationService crossVerificationService) {
         this.dnsLookupService = dnsLookupService;
         this.ipInfoService = ipInfoService;
         this.sslCertService = sslCertService;
         this.whoisService = whoisService;
         this.queryLogService = queryLogService;
+        this.crtShService = crtShService;
+        this.riskAssessmentService = riskAssessmentService;
+        this.crossVerificationService = crossVerificationService;
     }
 
     public ScanResult scan(String rawDomain) {
@@ -41,6 +51,10 @@ public class ScanService {
 
         result.setSslCert(sslCertService.inspect(cleanDomain));
         result.setWhois(whoisService.lookup(cleanDomain));
+        result.setCrtSh(crtShService.lookup(cleanDomain));
+        result.setObservations(riskAssessmentService.assess(result));
+        result.setCrossVerification(crossVerificationService.verifyDns(cleanDomain));
+        result.setConfidence(riskAssessmentService.calculateConfidence(result));
 
         return result;
     }

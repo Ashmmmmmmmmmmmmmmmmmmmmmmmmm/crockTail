@@ -5,12 +5,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class IpInfoService {
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final RetryHelper retryHelper;
+    public IpInfoService(RetryHelper retryHelper) {
+        this.retryHelper = retryHelper;
+    }
 
     /**
      * Look up geolocation and ASN ownership info for the given IP
@@ -31,7 +37,13 @@ public class IpInfoService {
 
         try {
             String url = "http://ip-api.com/json/" + ip + "?fields=status,country,city,isp,org,as";
-            String response = restTemplate.getForObject(url, String.class);
+
+            String response = retryHelper.withRetry(
+                    () -> restTemplate.getForObject(url, String.class),
+                    3,
+                    800
+            );
+
             JsonNode node = objectMapper.readTree(response);
 
             if ("success".equals(node.path("status").asText())) {

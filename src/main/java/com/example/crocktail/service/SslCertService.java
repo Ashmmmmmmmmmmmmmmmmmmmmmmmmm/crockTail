@@ -14,6 +14,12 @@ import java.util.List;
 @Service
 public class SslCertService {
 
+    private final RetryHelper retryHelper;
+
+    public SslCertService(RetryHelper retryHelper) {
+        this.retryHelper = retryHelper;
+    }
+
     /**
      * Perform a standard TLS handshake against the target domain's port 443
      * and read the certificate metadata.
@@ -23,25 +29,45 @@ public class SslCertService {
         SslCertResult result = new SslCertResult();
 
         try {
+            X509Certificate cert = retryHelper.withRetry(
+                    () -> fetchCertificate(domain),
+                    3,
+                    800
+            );
+
+            result.setIssuer(cert.getIssuerX500Principal().getName());
+            result.setSubject(cert.getSubjectX500Principal().getName());
+            result.setValidFrom(cert.getNotBefore().toString());
+            result.setValidTo(cert.getNotAfter().toString());
+            result.setSanDomains(extractSanDomains(cert));
+
+            long daysLeft = (cert.getNotAfter().getTime() - System.currentTimeMillis()) / (1000 * 60 * 60 * 24);
+            result.setDaysUntilExpiry(daysLeft);
+
+        } catch (Exception e) {
+            result.setError("Certificate retrieval failed: " + e.getMessage());
+        }
+
+        return result;
+    }
+
+    /**
+     * Connect to the domain's port 443 and return its X.509 certificate.
+     * Wrapped by retryHelper in inspect(), so this can throw freely.
+     */
+    private X509Certificate fetchCertificate(String domain) {
+        try {
             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
             try (SSLSocket socket = (SSLSocket) factory.createSocket(domain, 443)) {
                 socket.setSoTimeout(8000);
                 socket.startHandshake();
 
                 Certificate[] certs = socket.getSession().getPeerCertificates();
-                X509Certificate cert = (X509Certificate) certs[0];
-
-                result.setIssuer(cert.getIssuerX500Principal().getName());
-                result.setSubject(cert.getSubjectX500Principal().getName());
-                result.setValidFrom(cert.getNotBefore().toString());
-                result.setValidTo(cert.getNotAfter().toString());
-                result.setSanDomains(extractSanDomains(cert));
+                return (X509Certificate) certs[0];
             }
         } catch (Exception e) {
-            result.setError("Certificate retrieval failed: " + e.getMessage());
+            throw new RuntimeException(e);
         }
-
-        return result;
     }
 
     /**

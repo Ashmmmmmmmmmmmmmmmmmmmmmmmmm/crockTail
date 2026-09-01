@@ -262,12 +262,12 @@ const handleBatchSaveLog = async (item, index) => {
       </div>
 
       <div v-else class="batch-container">
-  <textarea
-      v-model="batchInput"
-      class="batch-input"
-      placeholder="example.com&#10;google.com&#10;one per line..."
-      spellcheck="false"
-  ></textarea>
+        <textarea
+            v-model="batchInput"
+            class="batch-input"
+            placeholder="example.com&#10;google.com&#10;one per line..."
+            spellcheck="false"
+        ></textarea>
         <button class="px-btn" @click="handleBatchScan" :disabled="batchLoading">
           {{ batchLoading ? '...' : 'SCAN ALL' }}
         </button>
@@ -281,6 +281,14 @@ const handleBatchSaveLog = async (item, index) => {
           <div class="corner-dots"><span></span><span></span><span></span></div>
           <span class="panel-label">RESULTS //</span>
           <span class="panel-target">{{ result.domain }}</span>
+          <span v-if="result.confidence" class="confidence-tag" :class="result.confidence.level" :title="result.confidence.explanation">{{ result.confidence.level.toUpperCase() }} · {{ result.confidence.score }}</span>
+        </div>
+
+        <div v-if="result.observations && result.observations.length > 0" class="observations">
+          <div v-for="(obs, i) in result.observations" :key="i" class="obs-item" :class="obs.level">
+            <span class="obs-icon">{{ obs.level === 'warning' ? '⚠' : 'ℹ' }}</span>
+            <span>{{ obs.message }}</span>
+          </div>
         </div>
 
         <div class="tab-bar">
@@ -299,7 +307,6 @@ const handleBatchSaveLog = async (item, index) => {
             <div class="kv"><span>NS</span><code>{{ result.dns.ns.join(', ') || '—' }}</code></div>
             <div class="kv"><span>TXT</span><code class="wrap">{{ result.dns.txt.join('  |  ') || '—' }}</code></div>
             <div class="kv"><span>Source</span><code>{{ result.dns.source }}</code></div>
-
           </template>
 
           <template v-if="activeTab === 'ip'">
@@ -318,6 +325,10 @@ const handleBatchSaveLog = async (item, index) => {
             <template v-else>
               <div class="kv"><span>Issuer</span><code>{{ result.sslCert?.issuer || '—' }}</code></div>
               <div class="kv"><span>Valid to</span><code>{{ result.sslCert?.validTo || '—' }}</code></div>
+              <div class="kv" v-if="result.sslCert?.daysUntilExpiry != null">
+                <span>Days left</span>
+                <code :class="{ 'warn-text': result.sslCert.daysUntilExpiry <= 15 }">{{ result.sslCert.daysUntilExpiry }}</code>
+              </div>
               <p class="sub-label">SAN ({{ result.sslCert?.sanDomains?.length || 0 }})</p>
               <ul class="san-list">
                 <li v-for="san in result.sslCert?.sanDomains" :key="san">{{ san }}</li>
@@ -345,6 +356,7 @@ const handleBatchSaveLog = async (item, index) => {
             {{ savedMsg || (savingLog ? 'SAVING...' : '↓ SAVE LOG') }}
           </button>
         </div>
+      </div>
 
       <p v-if="!loading && !result" class="idle-hint">enter a domain and press scan</p>
     </div>
@@ -363,7 +375,6 @@ const handleBatchSaveLog = async (item, index) => {
         </button>
       </div>
     </div>
-  </div>
   </div>
 </template>
 
@@ -563,4 +574,35 @@ html, body {
 }
 .log-btn-sm:hover:not(:disabled) { color: #a0a0f0; border-color: #5858d0; }
 .log-btn-sm:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.observations {
+  border-bottom: 2px solid #222244;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.obs-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+}
+.obs-item.warning { color: #d0a840; }
+.obs-item.info { color: #7090c0; }
+.obs-icon { font-size: 14px; }
+
+.warn-text { color: #d0a840 !important; }
+
+.confidence-tag {
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  padding: 2px 8px;
+  border: 1px solid;
+  letter-spacing: 1px;
+}
+.confidence-tag.high { color: #6ea078; border-color: #3a5a40; }
+.confidence-tag.medium { color: #c8a840; border-color: #6a5820; }
+.confidence-tag.low { color: #c86868; border-color: #6a2828; }
 </style>
